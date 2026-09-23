@@ -5,7 +5,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 import threading
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, CommandHandler, filters
-import google.generativeai as genai
+from google import genai
 
 # Logging ayarları
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -17,6 +17,11 @@ class SimpleHandler(BaseHTTPRequestHandler):
         self.send_header("Content-type", "text/plain")
         self.end_headers()
         self.wfile.write(b"Bot is active and running!")
+
+    def do_HEAD(self):
+        self.send_response(200)
+        self.send_header("Content-type", "text/plain")
+        self.end_headers()
 
 def run_web_server():
     port = int(os.environ.get("PORT", 10000))
@@ -34,7 +39,8 @@ WC_URL = os.getenv("WC_URL", "https://kuandyparfum.com.tr")
 WC_CONSUMER_KEY = os.getenv("WC_CONSUMER_KEY")
 WC_CONSUMER_SECRET = os.getenv("WC_CONSUMER_SECRET")
 
-genai.configure(api_key=GEMINI_API_KEY)
+# Yeni Google GenAI İstemcisi
+client = genai.Client(api_key=GEMINI_API_KEY)
 
 # WooCommerce'den ürün arama ve detay çekme fonksiyonu
 def woocommerce_urun_ara(arama_terimi):
@@ -81,12 +87,6 @@ KURALLAR:
 6. Asla başka rakip sitelere yönlendirme yapma.
 """
 
-# Kararlı ve hatasız model tanımlaması
-model = genai.GenerativeModel(
-    model_name='gemini-2.5-flash',
-    system_instruction=parfum_talimati
-)
-
 async def start_komutu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     karsilama = (
         "Merhaba! Kuandy Parfüm'ün (kuandyparfum.com.tr) yapay zeka danışmanına hoş geldiniz. 🌸\n\n"
@@ -107,7 +107,14 @@ async def ai_yanitla(update: Update, context: ContextTypes.DEFAULT_TYPE):
         baglam_mesaji = f"Kullanıcı mesajı: {kullanici_mesaji}\n\nNot: Sitede bu aramaya birebir uyan ürün bulunamadı. Genel koleksiyon veya ana sayfa linki olarak https://kuandyparfum.com.tr adresini ver."
     
     try:
-        response = model.generate_content(baglam_mesaji)
+        # Yeni google-genai kütüphanesi ile içerik üretimi ve sistem talimatı entegrasyonu
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=baglam_mesaji,
+            config={
+                'system_instruction': parfum_talimati,
+            }
+        )
         await update.message.reply_text(response.text, disable_web_page_preview=False)
     except Exception as e:
         print(f"Hata detayı: {e}")
@@ -118,5 +125,5 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("start", start_komutu))
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), ai_yanitla))
     
-    print("Kıyakbot Kararlı Sürüm ile çalışıyor...")
+    print("Kıyakbot Yeni GenAI SDK ile çalışıyor...")
     app.run_polling()
