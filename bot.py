@@ -32,7 +32,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 genai.configure(api_key=GEMINI_API_KEY)
 # En kararlı çalışan Gemini modeli
-model = genai.GenerativeModel('gemini-2.5-flash')
+model = genai.GenerativeModel('gemini-3.6-flash')
 
 async def ai_yanitla(update: Update, context: ContextTypes.DEFAULT_TYPE):
     kullanici_mesaji = update.message.text
