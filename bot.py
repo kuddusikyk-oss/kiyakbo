@@ -1,5 +1,7 @@
 import os
 import logging
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import threading
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
 import google.generativeai as genai
@@ -7,12 +9,30 @@ import google.generativeai as genai
 # Logging ayarları
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
+# Render'ın port isteğini karşılamak için mini web sunucusunu önce başlatıyoruz
+class SimpleHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-type", "text/plain")
+        self.end_headers()
+        self.wfile.write(b"Bot is active and running!")
+
+def run_web_server():
+    port = int(os.environ.get("PORT", 10000))
+    server = HTTPServer(("0.0.0.0", port), SimpleHandler)
+    server.serve_forever()
+
+# Web sunucusunu arka planda (thread'de) başlatıyoruz
+t = threading.Thread(target=run_web_server)
+t.daemon = True
+t.start()
+
 # Token ve API anahtarını güvenli bir şekilde bulut ortamından alıyoruz
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-2.5-flash')
+model = genai.GenerativeModel('gemini-1.5-flash')
 
 async def ai_yanitla(update: Update, context: ContextTypes.DEFAULT_TYPE):
     kullanici_mesaji = update.message.text
@@ -31,24 +51,3 @@ if __name__ == '__main__':
     
     print("Kıyakbot yapay zeka modülüyle çalışıyor...")
     app.run_polling()
-import os
-from http.server import HTTPServer, BaseHTTPRequestHandler
-import threading
-
-# Render'ın port isteğini karşılamak için mini bir web sunucusu
-class SimpleHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.send_header("Content-type", "text/plain")
-        self.end_headers()
-        self.wfile.write(b"Bot is active and running!")
-
-def run_web_server():
-    port = int(os.environ.get("PORT", 10000))
-    server = HTTPServer(("0.0.0.0", port), SimpleHandler)
-    server.serve_forever()
-
-# Web sunucusunu arka planda (ayrı bir thread'de) başlatıyoruz
-t = threading.Thread(target=run_web_server)
-t.daemon = True
-t.start()
