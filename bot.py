@@ -107,7 +107,6 @@ async def ai_yanitla(update: Update, context: ContextTypes.DEFAULT_TYPE):
         baglam_mesaji = f"Kullanıcı mesajı: {kullanici_mesaji}\n\nNot: Sitede bu aramaya birebir uyan ürün bulunamadı. Genel koleksiyon veya ana sayfa linki olarak https://kuandyparfum.com.tr adresini ver."
     
     try:
-        # Yeni google-genai kütüphanesi ile içerik üretimi ve sistem talimatı entegrasyonu
         response = client.models.generate_content(
             model='gemini-2.5-flash',
             contents=baglam_mesaji,
