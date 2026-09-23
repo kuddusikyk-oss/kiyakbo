@@ -36,11 +36,11 @@ WC_CONSUMER_SECRET = os.getenv("WC_CONSUMER_SECRET")
 
 genai.configure(api_key=GEMINI_API_KEY)
 
-# WooCommerce'den ürün ve kısa açıklamalarını arama fonksiyonu
+# WooCommerce'den ürün arama ve detay çekme fonksiyonu
 def woocommerce_urun_ara(arama_terimi):
     try:
         url = f"{WC_URL}/wp-json/wc/v3/products"
-        params = {"search": arama_terimi, "per_page": 3}
+        params = {"search": arama_terimi, "per_page": 2}
         response = requests.get(url, params=params, auth=(WC_CONSUMER_KEY, WC_CONSUMER_SECRET), timeout=10)
         
         if response.status_code == 200:
@@ -48,38 +48,36 @@ def woocommerce_urun_ara(arama_terimi):
             if not urunler:
                 return None
             
-            bilgi_metni = "Sitemizdeki Gerçek Ürün Verileri:\n\n"
+            bilgi_metni = "SİTEDE BULUNAN GERÇEK ÜRÜN VERİLERİ (Bu bilgileri ve özellikle verilen LİNKİ birebir kullan):\n\n"
             for u in urunler:
                 ad = u.get("name")
                 fiyat = u.get("price")
                 stok_durumu = "Stokta Var ✅" if u.get("stock_status") == "instock" else "Tükendi ❌"
-                link = u.get("permalink")
-                # Sitenize girdiğiniz kısa açıklamayı (HTML etiketlerinden arındırarak) çekiyoruz
-                kisa_aciklama = u.get("short_description", "").replace("<p>", "").replace("</p>", "").replace("<br />", "\n")
+                link = u.get("permalink") # Doğrudan ürünün kendi linki
+                kisa_aciklama = u.get("short_description", "").replace("<p>", "").replace("</p>", "").replace("<br />", "\n").replace("<strong>", "").replace("</strong>", "")
                 
-                bilgi_metni += f"🔹 Ürün: {ad}\n"
-                bilgi_metni += f"   💰 Fiyat: {fiyat} TL\n"
-                bilgi_metni += f"   📦 Durum: {stok_durumu}\n"
-                bilgi_metni += f"   📝 Detay/Açıklama: {kisa_aciklama}\n"
-                bilgi_metni += f"   🔗 Link: {link}\n\n"
+                bilgi_metni += f"- Ürün Adı: {ad}\n"
+                bilgi_metni += f"- Fiyat: {fiyat} TL\n"
+                bilgi_metni += f"- Stok Durumu: {stok_durumu}\n"
+                bilgi_metni += f"- Ürün Kısa Açıklaması: {kisa_aciklama}\n"
+                bilgi_metni += f"- ÜRÜN DOĞRUDAN LİNKİ: {link}\n\n"
             return bilgi_metni
         else:
-            print(f"WooCommerce API Yanıt Kodu: {response.status_code}")
             return None
     except Exception as e:
         print(f"WooCommerce API Hatası: {e}")
         return None
 
-# Kuandy Parfüm sistem talimatı
+# Kesin kurallı sistem talimatı
 parfum_talimati = """
-Sen Kuandy Parfüm (kuandyparfum.com.tr) e-ticaret sitesinin resmi ve akıllı yapay zeka parfüm danışmanısın. 
-Asla başka bir rakip firmaya veya dış siteye yönlendirme yapmayacaksın.
+Sen Kuandy Parfüm (kuandyparfum.com.tr) e-ticaret sitesinin resmi yapay zeka parfüm danışmanısın. 
 
-Görevin:
-1. Müşteri bir ürün sorduğunda, eğer aşağıda "WooCommerce Sitemizden Alınan Gerçek Ürün Verileri" başlığı altında bir bilgi varsa, o bilgileri (fiyat, stok, kısa açıklama ve verilen linki) birebir kullanarak müşteriye sun.
-2. Müşteriye ürünün doğrudan satın alma linkini Markdown formatında şık bir şekilde ver (Örn: [Ürünü İncele ve Satın Al](LİNK)).
-3. Sitemizdeki alışverişlerde kazandıran **Kuandy Coin** avantajından mutlaka bahset.
-4. Cevapların kibar, profesyonel ve satış odaklı olsun.
+KURALLAR:
+1. Kullanıcı bir ürün sorduğunda, yukarıda sağlanan "SİTEDE BULUNAN GERÇEK ÜRÜN VERİLERİ"ndeki bilgileri (fiyat, stok, kısa açıklama) eksiksiz kullan.
+2. Kesinlikle ama kesinlikle genel site ana sayfasını link olarak verme! Sadece sana verilen "ÜRÜN DOĞRUDAN LİNKİ" adresini kullan. Linki şu formatta ekle: [Ürünü İncele ve Satın Al (Fiyat TL)](LİNK).
+3. Mesajlarında asla ham HTML etiketleri (`###`, bozuk yıldızlar vb.) kullanma. Telegram Markdown kurallarına uygun, temiz ve düzenli metinler yaz.
+4. Alışverişlerde kazanılan **Kuandy Coin** avantajından mutlaka bahset.
+5. Asla başka rakip sitelere yönlendirme yapma.
 """
 
 model = genai.GenerativeModel(
@@ -98,16 +96,17 @@ async def ai_yanitla(update: Update, context: ContextTypes.DEFAULT_TYPE):
     kullanici_mesaji = update.message.text
     print(f"Gelen mesaj: {kullanici_mesaji}")
     
-    # WooCommerce'den ürün aratıyoruz
     wc_veri = woocommerce_urun_ara(kullanici_mesaji)
     
     baglam_mesaji = kullanici_mesaji
     if wc_veri:
-        baglam_mesaji = f"Kullanıcı mesajı: {kullanici_mesaji}\n\nWooCommerce Sitemizden Alınan Gerçek Ürün Verileri:\n{wc_veri}"
+        baglam_mesaji = f"Kullanıcı mesajı: {kullanici_mesaji}\n\n{wc_veri}"
+    else:
+        baglam_mesaji = f"Kullanıcı mesajı: {kullanici_mesaji}\n\nNot: Sitede bu aramaya birebir uyan ürün bulunamadı. Genel koleksiyon linki olarak https://kuandyparfum.com.tr adresini ver."
     
     try:
         response = model.generate_content(baglam_mesaji)
-        # Markdown çakışmalarını önlemek için düz metin veya güvenli gönderim yapıyoruz
+        # Markdown hatalarının patlamaması için parse_mode kullanmıyoruz (veya düz metin/güvenli gönderim yapıyoruz)
         await update.message.reply_text(response.text, disable_web_page_preview=False)
     except Exception as e:
         print(f"Hata detayı: {e}")
@@ -118,5 +117,5 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("start", start_komutu))
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), ai_yanitla))
     
-    print("Kıyakbot WooCommerce Kısa Açıklama Entegrasyonu ile çalışıyor...")
+    print("Kıyakbot Hatasız Ürün Linki Entegrasyonu ile çalışıyor...")
     app.run_polling()
