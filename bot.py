@@ -31,3 +31,24 @@ if __name__ == '__main__':
     
     print("Kıyakbot yapay zeka modülüyle çalışıyor...")
     app.run_polling()
+import os
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import threading
+
+# Render'ın port isteğini karşılamak için mini bir web sunucusu
+class SimpleHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-type", "text/plain")
+        self.end_headers()
+        self.wfile.write(b"Bot is active and running!")
+
+def run_web_server():
+    port = int(os.environ.get("PORT", 10000))
+    server = HTTPServer(("0.0.0.0", port), SimpleHandler)
+    server.serve_forever()
+
+# Web sunucusunu arka planda (ayrı bir thread'de) başlatıyoruz
+t = threading.Thread(target=run_web_server)
+t.daemon = True
+t.start()
