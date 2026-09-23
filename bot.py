@@ -53,7 +53,7 @@ def woocommerce_urun_ara(arama_terimi):
                 ad = u.get("name")
                 fiyat = u.get("price")
                 stok_durumu = "Stokta Var ✅" if u.get("stock_status") == "instock" else "Tükendi ❌"
-                link = u.get("permalink") # Doğrudan ürünün kendi linki
+                link = u.get("permalink")
                 kisa_aciklama = u.get("short_description", "").replace("<p>", "").replace("</p>", "").replace("<br />", "\n").replace("<strong>", "").replace("</strong>", "")
                 
                 bilgi_metni += f"- Ürün Adı: {ad}\n"
@@ -73,15 +73,17 @@ parfum_talimati = """
 Sen Kuandy Parfüm (kuandyparfum.com.tr) e-ticaret sitesinin resmi yapay zeka parfüm danışmanısın. 
 
 KURALLAR:
-1. Kullanıcı bir ürün sorduğunda, yukarıda sağlanan "SİTEDE BULUNAN GERÇEK ÜRÜN VERİLERİ"ndeki bilgileri (fiyat, stok, kısa açıklama) eksiksiz kullan.
-2. Kesinlikle ama kesinlikle genel site ana sayfasını link olarak verme! Sadece sana verilen "ÜRÜN DOĞRUDAN LİNKİ" adresini kullan. Linki şu formatta ekle: [Ürünü İncele ve Satın Al (Fiyat TL)](LİNK).
-3. Mesajlarında asla ham HTML etiketleri (`###`, bozuk yıldızlar vb.) kullanma. Telegram Markdown kurallarına uygun, temiz ve düzenli metinler yaz.
-4. Alışverişlerde kazanılan **Kuandy Coin** avantajından mutlaka bahset.
-5. Asla başka rakip sitelere yönlendirme yapma.
+1. Kullanıcı "merhaba", "selam" gibi genel bir selamlama yazdığında kibarca karşıla ve Kuandy Parfüm'e hoş geldin de.
+2. Kullanıcı bir ürün sorduğunda, yukarıda sağlanan "SİTEDE BULUNAN GERÇEK ÜRÜN VERİLERİ"ndeki bilgileri (fiyat, stok, kısa açıklama) eksiksiz kullan.
+3. Kesinlikle genel ana sayfa linkini verme! Sadece sana verilen "ÜRÜN DOĞRUDAN LİNKİ" adresini kullan. Linki şu formatta ekle: [Ürünü İncele ve Satın Al (Fiyat TL)](LİNK).
+4. Mesajlarında ham HTML etiketleri (`###` vb.) kullanma. Telegram Markdown kurallarına uygun temiz metinler yaz.
+5. Alışverişlerde kazanılan **Kuandy Coin** avantajından mutlaka bahset.
+6. Asla başka rakip sitelere yönlendirme yapma.
 """
 
+# Kararlı ve hatasız model tanımlaması
 model = genai.GenerativeModel(
-    model_name='gemini-3.6-flash',
+    model_name='gemini-2.5-flash',
     system_instruction=parfum_talimati
 )
 
@@ -102,11 +104,10 @@ async def ai_yanitla(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if wc_veri:
         baglam_mesaji = f"Kullanıcı mesajı: {kullanici_mesaji}\n\n{wc_veri}"
     else:
-        baglam_mesaji = f"Kullanıcı mesajı: {kullanici_mesaji}\n\nNot: Sitede bu aramaya birebir uyan ürün bulunamadı. Genel koleksiyon linki olarak https://kuandyparfum.com.tr adresini ver."
+        baglam_mesaji = f"Kullanıcı mesajı: {kullanici_mesaji}\n\nNot: Sitede bu aramaya birebir uyan ürün bulunamadı. Genel koleksiyon veya ana sayfa linki olarak https://kuandyparfum.com.tr adresini ver."
     
     try:
         response = model.generate_content(baglam_mesaji)
-        # Markdown hatalarının patlamaması için parse_mode kullanmıyoruz (veya düz metin/güvenli gönderim yapıyoruz)
         await update.message.reply_text(response.text, disable_web_page_preview=False)
     except Exception as e:
         print(f"Hata detayı: {e}")
@@ -117,5 +118,5 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("start", start_komutu))
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), ai_yanitla))
     
-    print("Kıyakbot Hatasız Ürün Linki Entegrasyonu ile çalışıyor...")
+    print("Kıyakbot Kararlı Sürüm ile çalışıyor...")
     app.run_polling()
