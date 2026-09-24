@@ -117,7 +117,6 @@ async def ai_yanitla(update: Update, context: ContextTypes.DEFAULT_TYPE):
         baglam_mesaji = f"Kullanıcı mesajı: {kullanici_mesaji}\n\nNot: Sitede bu aramaya birebir uyan ürün bulunamadı. Kullanıcıya kışlık, yazlık veya 4 mevsimlik genel koleksiyonlar için https://kuandyparfum.com.tr adresini göster."
     
     try:
-        # Hata ekranında belirtilen güncel model adı
         response = client.models.generate_content(
             model='gemini-3.6-flash',
             contents=baglam_mesaji,
@@ -132,8 +131,15 @@ async def ai_yanitla(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 if __name__ == '__main__':
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
+    
+    # Eski webhook bağlantılarını ve çakışmaları temizle
+    import asyncio
+    async def clear_webhook():
+        await app.bot.delete_webhook(drop_pending_updates=True)
+    asyncio.run(clear_webhook())
+
     app.add_handler(CommandHandler("start", start_komutu))
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), ai_yanitla))
     
-    print("Kıyakbot 3.6-flash Model ile çalışıyor...")
+    print("Kıyakbot 3.6-flash Sürüm ile çalışıyor...")
     app.run_polling(drop_pending_updates=True)
