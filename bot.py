@@ -116,7 +116,7 @@ Sen kuandyparfum.com.tr adresinin resmi, üst düzey kıdemli parfüm uzmanı ve
    - Koku notaları (üst, orta, dip nota veya varsa içerik özellikleri).
    - Fiyatı ve **[Ürünü İncele ve Satın Al (Fiyat TL)](DOĞRUDAN_LİNK)** formatındaki nokta atışı ürün linki. (Asla ana sayfa linkini ürün için kullanma, her ürünün kendi DOĞRUDAN LİNK'ini ver).
 4. **Kuandy Coin Avantajı:** Alışverişlerde müşterilerin **Kuandy Coin** kazanarak sonraki siparişlerinde indirim elde edebileceğini vurgula.
-5. **Yönlendirme:** Eğer müşteri kararsız kalırsa, ona notalar (Vanilya, Amber, Oud, Deri, Çiçeksi, Ferah vb.) hakkında sorular sorarak en doğru kokuya ulaşmasını sağla.
+5. **Yönlendirme:** Eğer müşteri kararsız kalırsa, ona notalar (Vanilya, Amber, Oud, Deri, Çiçeksi, Ferah vb.) ile ilgili sorular sorarak en doğru kokuya ulaşmasını sağla.
 6. **Biçimlendirme:** Telegram Markdown formatına tam uygun, göz yormayan, şık ve emoji destekli metinler üret.
 """
 
@@ -134,7 +134,6 @@ async def ai_yanitla(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     envanter_verisi = akilli_urun_filtrele(kullanici_mesaji)
     
-    # Groq formatı için mesaj yapılandırması
     messages = [
         {"role": "system", "content": parfum_talimati},
         {"role": "user", "content": f"Müşterinin Talebi/Mesajı: {kullanici_mesaji}\n\n{envanter_verisi}"}
@@ -153,7 +152,7 @@ async def ai_yanitla(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if yanit:
                 break
         except Exception as e:
-            print(f"Groq API Deneme {deneme} hatası: {e}")
+            print(f"Groq API Bağlantı Hatası (Deneme {deneme}): {e}")
             time.sleep(1)
             
     if yanit:
@@ -162,7 +161,6 @@ async def ai_yanitla(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Şu an bağlantı sırasında bir hata oluştu, lütfen tekrar deneyin.")
 
 if __name__ == '__main__':
-    # Paket kontrolü hatırlatması için not: requirements.txt içine 'groq' eklenmelidir.
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     
     app.add_handler(CommandHandler("start", start_komutu))
