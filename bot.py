@@ -42,7 +42,7 @@ WC_CONSUMER_SECRET = os.getenv("WC_CONSUMER_SECRET")
 # Google GenAI İstemcisi
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# WooCommerce'den ürün, nitelik ve kategori arama fonksiyonu
+# WooCommerce'den ürün arama fonksiyonu
 def woocommerce_urun_ara(arama_terimi):
     try:
         url = f"{WC_URL}/wp-json/wc/v3/products"
@@ -61,7 +61,6 @@ def woocommerce_urun_ara(arama_terimi):
                 stok_durumu = "Stokta Var ✅" if u.get("stock_status") == "instock" else "Tükendi ❌"
                 link = u.get("permalink")
                 
-                # Nitelikler (Örn: Cinsiyet, Koku Notası vb.)
                 nitelikler = u.get("attributes", [])
                 nitelik_metni = ""
                 for nit in nitelikler:
@@ -75,8 +74,8 @@ def woocommerce_urun_ara(arama_terimi):
                 bilgi_metni += f"* Fiyat: {fiyat} TL\n"
                 bilgi_metni += f"* Stok Durumu: {stok_durumu}\n"
                 if nitelik_metni:
-                    bilgi_metni += f"* Ürün Nitelikleri (Cinsiyet/Nota vb.):\n{nitelik_metni}"
-                bilgi_metni += f"* Kısa Açıklama: {kisa_aciklama}\n"
+                    bilgi_metni += f"* Nitelikler (Cinsiyet/Nota vb.):\n{nitelik_metni}"
+                bilgi_metni += f"* Açıklama: {kisa_aciklama}\n"
                 bilgi_metni += f"* DOĞRUDAN LİNK: {link}\n\n"
             return bilgi_metni
         else:
@@ -85,27 +84,24 @@ def woocommerce_urun_ara(arama_terimi):
         print(f"WooCommerce API Hatası: {e}")
         return None
 
-# Kapsamlı Sistem Talimatı
+# Sistem Talimatı
 parfum_talimati = """
 Sen Kuandy Parfüm (kuandyparfum.com.tr) e-ticaret sitesinin resmi ve profesyonel yapay zeka parfüm danışmanısın. 
 
-GÖREVLERİN VE KURALLAR:
-1. **Karşılama:** Kullanıcı "merhaba", "selam" gibi bir giriş yaptığında kibarca kendini tanıt ("Ben Kuandy Parfüm yapay zeka danışmanıyım 🌸") ve nasıl yardımcı olabileceğini sor.
-2. **Kategori ve Mevsim Yönlendirmesi:** 
-   - Kullanıcı kışlık parfüm isterse kış parfümleri kategorisine/seçeneklerine yönlendir.
-   - 4 mevsim parfüm isterse yaz/kış dört mevsim kullanılabilen ürünlere yönlendir.
-   - Genel aramalarda kullanıcıyı doğru koku profiline ve kategoriye yönlendir.
-3. **Cinsiyet / Unisex Belirtme:** Önerdiğin her ürünün **Erkek, Kadın veya Unisex** olduğunu ürün niteliklerine bakarak net bir şekilde belirt.
-4. **Koku Notaları:** Sitede tanımlı olan niteliklerdeki koku notalarını (üst nota, kalp nota, dip nota vb.) ve açıklamaları kullanarak müşteriye detaylı bilgi ver.
-5. **Ürün Linki ve Fiyat:** Ürün önerirken mutlaka fiyatını belirt ve linki şu formatta ver: `[Ürünü İncele ve Satın Al (Fiyat TL)](ÜRÜN_DOĞRUDAN_LİNKİ)`. Asla genel ana sayfa linkini ürün için verme.
-6. **Kuandy Coin:** Alışverişlerde kazanılan **Kuandy Coin** avantajından bahset.
-7. **Biçimlendirme:** Telegram Markdown formatına uygun, temiz ve düzenli metinler yaz. Ham HTML etiketleri kullanma.
+KURALLAR:
+1. Kullanıcı "merhaba", "selam" gibi selamlama yazdığında kibarca kendini tanıt ("Ben Kuandy Parfüm yapay zeka danışmanıyım 🌸") ve nasıl yardımcı olabileceğini sor.
+2. Kullanıcı kışlık parfüm, 4 mevsim parfüm veya belirli bir nota sorduğunda, sağlanan ürün verilerini kullanarak yönlendirme yap.
+3. Önerdiğin her ürünün **Erkek, Kadın veya Unisex** olduğunu mutlaka belirt.
+4. Parfümün koku notalarını (varsa niteliklerden) müşteriye aktar.
+5. Ürün önerirken fiyatı belirt ve linki şu formatta ver: [Ürünü İncele ve Satın Al (Fiyat TL)](ÜRÜN_LİNKİ). Asla ana sayfa linkini ürün için verme.
+6. Alışverişlerde kazanılan Kuandy Coin avantajından bahset.
+7. Telegram Markdown formatına uygun temiz metinler yaz, ham HTML etiketleri kullanma.
 """
 
 async def start_komutu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     karsilama = (
         "Merhaba! Ben Kuandy Parfüm'ün (kuandyparfum.com.tr) yapay zeka danışmanıyım. 🌸\n\n"
-        "İster kışlık, ister yazlık, ister 4 mevsimlik arayın; aradığınız parfüm notalarını, cinsiyet tercihini ve size özel Kuandy Coin avantajlarını anında bulabilirim. Hangi parfümü arıyorsunuz?"
+        "İster kışlık, ister 4 mevsimlik, ister özel koku notalarına sahip parfümler arayın; aradığınız tüm kokuları, cinsiyet seçimlerini ve Kuandy Coin avantajlarını anında bulabilirim. Hangi parfümü arıyorsunuz?"
     )
     await update.message.reply_text(karsilama)
 
@@ -118,9 +114,10 @@ async def ai_yanitla(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if wc_veri:
         baglam_mesaji = f"Kullanıcı mesajı: {kullanici_mesaji}\n\n{wc_veri}"
     else:
-        baglam_mesaji = f"Kullanıcı mesajı: {kullanici_mesaji}\n\nNot: Sitede bu aramaya birebir uyan ürün bulunamadı. Kullanıcıya kışlık, yazlık veya 4 mevsimlik genel koleksiyonlar için https://kuandyparfum.com.tr adresini rehber olarak göster ve alternatif kategoriler sor."
+        baglam_mesaji = f"Kullanıcı mesajı: {kullanici_mesaji}\n\nNot: Sitede bu aramaya birebir uyan ürün bulunamadı. Kullanıcıya kışlık, yazlık veya 4 mevsimlik genel koleksiyonlar için https://kuandyparfum.com.tr adresini göster."
     
     try:
+        # Hata ekranında belirtilen güncel model adı
         response = client.models.generate_content(
             model='gemini-3.6-flash',
             contents=baglam_mesaji,
@@ -131,12 +128,12 @@ async def ai_yanitla(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(response.text, disable_web_page_preview=False)
     except Exception as e:
         print(f"Hata detayı: {e}")
-        await update.message.reply_text("Parfüm danışmanımız yanıt üretirken anlık bir teknik sorunla karşılaştı, lütfen tekrar deneyin.")
+        await update.message.reply_text(f"Hata oluştu: {str(e)}")
 
 if __name__ == '__main__':
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler("start", start_komutu))
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), ai_yanitla))
     
-    print("Kıyakbot Kararlı ve Güncel Sürüm ile çalışıyor...")
-    app.run_polling()
+    print("Kıyakbot 3.6-flash Model ile çalışıyor...")
+    app.run_polling(drop_pending_updates=True)
