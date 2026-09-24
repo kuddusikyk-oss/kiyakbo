@@ -143,7 +143,7 @@ async def ai_yanitla(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for deneme in range(1, 4):
         try:
             completion = client.chat.completions.create(
-                model="llama-3.1-70b-versatile",  # Güncellenen çalışan model adı
+                model="llama-3.3-70b-versatile",
                 messages=messages,
                 temperature=0.4,
                 max_tokens=1500,
@@ -152,7 +152,8 @@ async def ai_yanitla(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if yanit:
                 break
         except Exception as e:
-            print(f"Groq API Bağlantı Hatası (Deneme {deneme}): {e}")
+            # Hatayı konsola tam olarak yazdırıyoruz ki görebilelim
+            print(f"❌ Groq API Bağlantı Hatası (Deneme {deneme}): {e}")
             time.sleep(1)
             
     if yanit:
@@ -166,5 +167,6 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("start", start_komutu))
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), ai_yanitla))
     
-    print("Kuandy Parfüm Uzmanı (Groq Llama 3.1) aktif ve çalışmaya hazır...")
+    print("Kuandy Parfüm Uzmanı (Groq Llama 3.3) aktif ve çalışmaya hazır...")
+    # Çakışma hatalarını önlemek için bekleyen eski güncellemeleri düşürüyoruz
     app.run_polling(drop_pending_updates=True)
