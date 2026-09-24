@@ -6,7 +6,6 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 import threading
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, CommandHandler, filters
-from groq import Groq
 
 # Logging ayarları
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -39,9 +38,6 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 WC_URL = os.getenv("WC_URL", "https://kuandyparfum.com.tr")
 WC_CONSUMER_KEY = os.getenv("WC_CONSUMER_KEY")
 WC_CONSUMER_SECRET = os.getenv("WC_CONSUMER_SECRET")
-
-# Groq İstemcisi
-client = Groq(api_key=GROQ_API_KEY)
 
 # WooCommerce Ürünlerini Bellekte Tutma ve Akıllı Önbellek (Cache)
 urunler_cache = []
@@ -134,25 +130,40 @@ async def ai_yanitla(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     envanter_verisi = akilli_urun_filtrele(kullanici_mesaji)
     
-    messages = [
-        {"role": "system", "content": parfum_talimati},
-        {"role": "user", "content": f"Müşterinin Talebi/Mesajı: {kullanici_mesaji}\n\n{envanter_verisi}"}
-    ]
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "model": "llama-3.1-8b-instant",
+        "messages": [
+            {"role": "system", "content": parfum_talimati},
+            {"role": "user", "content": f"Müşterinin Talebi/Mesajı: {kullanici_mesaji}\n\n{envanter_verisi}"}
+        ],
+        "temperature": 0.4,
+        "max_tokens": 1500
+    }
     
     yanit = None
     for deneme in range(1, 4):
         try:
-            completion = client.chat.completions.create(
-                model="llama-3.1-8b-instant",  # Güncel ve aktif Groq modeli
-                messages=messages,
-                temperature=0.4,
-                max_tokens=1500,
+            response = requests.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=20
             )
-            yanit = completion.choices[0].message.content
-            if yanit:
-                break
+            
+            if response.status_code == 200:
+                res_json = response.json()
+                yanit = res_json["choices"][0]["message"]["content"]
+                if yanit:
+                    break
+            else:
+                print(f"❌ Groq API HTTP Hatası ({response.status_code}): {response.text}")
         except Exception as e:
-            print(f"❌ Groq API Bağlantı Hatası (Deneme {deneme}): {e}")
+            print(f"❌ Groq API Bağlantı İstek Hatası (Deneme {deneme}): {e}")
             time.sleep(1)
             
     if yanit:
@@ -166,5 +177,5 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("start", start_komutu))
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), ai_yanitla))
     
-    print("Kuandy Parfüm Uzmanı (Groq Llama 3.1 8B) aktif ve çalışmaya hazır...")
+    print("Kuandy Parfüm Uzmanı (Direct HTTP Groq) aktif ve çalışmaya hazır...")
     app.run_polling(drop_pending_updates=True)
