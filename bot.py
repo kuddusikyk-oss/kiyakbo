@@ -122,7 +122,7 @@ async def ai_yanitla(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         response = client.models.generate_content(
-            model='gemini-2.0-flash',
+            model='gemini-3.6-flash',
             contents=baglam_mesaji,
             config={
                 'system_instruction': parfum_talimati,
