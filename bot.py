@@ -17,7 +17,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-type", "text/plain")
         self.end_headers()
-        self.wfile.write(b"Bot is active and running!")
+        self.wfile.write(b"Kuandy Parfum AI Bot is active and running!")
 
     def do_HEAD(self):
         self.send_response(200)
@@ -33,7 +33,7 @@ t = threading.Thread(target=run_web_server)
 t.daemon = True
 t.start()
 
-# API Ayarları
+# API ve Mağaza Ayarları
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 WC_URL = os.getenv("WC_URL", "https://kuandyparfum.com.tr")
@@ -43,95 +43,107 @@ WC_CONSUMER_SECRET = os.getenv("WC_CONSUMER_SECRET")
 # Google GenAI İstemcisi
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# WooCommerce'den esnek ürün arama fonksiyonu
-def woocommerce_urun_ara(arama_terimi):
+# WooCommerce Ürünlerini Bellekte Tutma ve Akıllı Önbellek (Cache)
+urunler_cache = []
+son_guncelleme_zamani = 0
+
+def woocommerce_envanterini_guncelle():
+    global urunler_cache, son_guncelleme_zamani
+    simdi = time.time()
+    # Her 15 dakikada bir veya ilk çalışmada envanteri tazele
+    if urunler_cache and (simdi - son_guncelleme_zamani < 900):
+        return urunler_cache
+
     try:
         url = f"{WC_URL}/wp-json/wc/v3/products"
-        # Önce tam terimle arat
-        params = {"search": arama_terimi, "per_page": 5}
-        response = requests.get(url, params=params, auth=(WC_CONSUMER_KEY, WC_CONSUMER_SECRET), timeout=10)
+        # En güncel ve stoktaki ürünleri çek
+        params = {"per_page": 50, "status": "publish", "orderby": "date", "order": "desc"}
+        response = requests.get(url, params=params, auth=(WC_CONSUMER_KEY, WC_CONSUMER_SECRET), timeout=15)
         
-        urunler = []
         if response.status_code == 200:
-            urunler = response.json()
-            
-        # Eğer tam eşleşme bulunamazsa kelimelere bölüp esnek arama yap (Örn: "kışlık erkek" -> "erkek" veya "kış")
-        if not urunler and len(arama_terimi.split()) > 1:
-            kelimeler = arama_terimi.split()
-            for kelime in kelimeler:
-                if len(kelime) > 3: # Kısa takıları ele
-                    params = {"search": kelime, "per_page": 5}
-                    resp = requests.get(url, params=params, auth=(WC_CONSUMER_KEY, WC_CONSUMER_SECRET), timeout=10)
-                    if resp.status_code == 200 and resp.json():
-                        urunler.extend(resp.json())
-        
-        if not urunler:
-            return None
-        
-        # Benzersiz ürünleri seç
-        benzersiz_urunler = {u['id']: u for u in urunler}.values()
-        
-        bilgi_metni = "SİTEDE BULUNAN İLGİLİ ÜRÜN VERİLERİ (Fiyat, Cinsiyet, Nitelikler ve Doğrudan Link):\n\n"
-        for u in list(benzersiz_urunler)[:4]:
-            ad = u.get("name")
-            fiyat = u.get("price")
-            stok_durumu = "Stokta Var ✅" if u.get("stock_status") == "instock" else "Tükendi ❌"
-            link = u.get("permalink")
-            
-            nitelikler = u.get("attributes", [])
-            nitelik_metni = ""
-            for nit in nitelikler:
-                isim = nit.get("name")
-                secenekler = ", ".join(nit.get("options", []))
-                nitelik_metni += f"- {isim}: {secenekler}\n"
-
-            kisa_aciklama = u.get("short_description", "").replace("<p>", "").replace("</p>", "").replace("<br />", "\n").replace("<strong>", "").replace("</strong>", "")
-            
-            bilgi_metni += f"* Ürün Adı: {ad}\n"
-            bilgi_metni += f"* Fiyat: {fiyat} TL\n"
-            bilgi_metni += f"* Stok Durumu: {stok_durumu}\n"
-            if nitelik_metni:
-                bilgi_metni += f"* Nitelikler (Cinsiyet/Nota vb.):\n{nitelik_metni}"
-            bilgi_metni += f"* Açıklama: {kisa_aciklama}\n"
-            bilgi_metni += f"* DOĞRUDAN LİNK: {link}\n\n"
-        return bilgi_metni
+            urunler_cache = response.json()
+            son_guncelleme_zamani = simdi
+            print(f"Başarıyla {len(urunler_cache)} adet ürün envantere yüklendi.")
     except Exception as e:
-        print(f"WooCommerce API Hatası: {e}")
-        return None
+        print(f"WooCommerce Envanter Çekme Hatası: {e}")
+    
+    return urunler_cache
 
-# Sistem Talimatı
+def akilli_urun_filtrele(kullanici_sorgusu):
+    tum_urunler = woocommerce_envanterini_guncelle()
+    if not tum_urunler:
+        return "Şu anda site envanterine ulaşılamadı."
+
+    # Müşteriye sunulmak üzere envanteri yapay zekanın anlayacağı zengin metin formatına dönüştür
+     envanter_metni = "KUANDY PARFÜM GÜNCEL ÜRÜN ENVANTERİ VE DETAYLARI:\n\n"
+    
+    for u in tum_urunler:
+        ad = u.get("name", "")
+        fiyat = u.get("price", "0")
+        stok = "Stokta Var ✅" if u.get("stock_status") == "instock" else "Tükendi ❌"
+        link = u.get("permalink", WC_URL)
+        
+        # Kategoriler
+        kategoriler = ", ".join([cat.get("name", "") for cat in u.get("categories", [])])
+        
+        # Nitelikler (Cinsiyet, Nota vb.)
+        nitelik_metni = ""
+        for nit in u.get("attributes", []):
+            isim = nit.get("name", "")
+            secenekler = ", ".join(nit.get("options", []))
+            nitelik_metni += f"  - {isim}: {secenekler}\n"
+
+        # HTML etiketlerinden arındırılmış kısa açıklama
+        aciklama = u.get("short_description", "")
+        for tag in ["<p>", "</p>", "<br>", "<br />", "<strong>", "</strong>", "<em>", "</em>"]:
+            aciklama = aciklama.replace(tag, "")
+        
+        envanter_metni += f"🔹 Ürün Adı: {ad}\n"
+        envanter_metni += f"   - Fiyat: {fiyat} TL\n"
+        envanter_metni += f"   - Durum: {stok}\n"
+        envanter_metni += f"   - Kategoriler: {kategoriler}\n"
+        if nitelik_metni:
+            envanter_metni += f"   - Nitelikler:\n{nitelik_metni}"
+        if aciklama.strip():
+            envanter_metni += f"   - Açıklama/Notlar: {aciklama.strip()}\n"
+        envanter_metni += f"   - DOĞRUDAN LİNK: {link}\n\n"
+
+    return envanter_metni
+
+# Profesyonel Parfüm Uzmanı ve Satış Danışmanı Sistem Talimatı
 parfum_talimati = """
-Sen Kuandy Parfüm (kuandyparfum.com.tr) e-ticaret sitesinin resmi ve profesyonel yapay zeka parfüm danışmanısın. 
+Sen kuandyparfum.com.tr adresinin resmi, üst düzey kıdemli parfüm uzmanı ve baş satış danışmanısın. Amacın müşterilere mağazadaki en uygun parfümleri nokta atışı önermek, koku zevklerine rehberlik etmek ve satışa yönlendirmektir.
 
-GÖREVLERİN VE KURALLAR:
-1. Kullanıcı "merhaba", "selam" gibi bir giriş yaptığında kibarca kendini tanıt ("Ben Kuandy Parfüm yapay zeka danışmanıyım 🌸") ve nasıl yardımcı olabileceğini sor.
-2. Kullanıcı kışlık, yazlık, 4 mevsim veya erkek/kadın/unisex parfüm istediğinde, sana sağlanan gerçek ürün verilerinden uygun olanları seçerek doğrudan müşteriye öner.
-3. Önerdiğin her ürünün **Erkek, Kadın veya Unisex** olduğunu niteliklere bakarak kesinlikle belirt.
-4. Parfümün koku notalarını (üst, orta, dip nota vb.) ve açıklamalarını müşteriye aktar.
-5. Ürün önerirken fiyatını mutlaka belirt ve linki şu formatta ver: [Ürünü İncele ve Satın Al (Fiyat TL)](ÜRÜN_LİNKİ). Asla ana sayfa linkini ürün için verme; her ürünün kendi DOĞRUDAN LİNK'ini kullan.
-6. Alışverişlerde kazanılan **Kuandy Coin** avantajından bahset.
-7. Telegram Markdown formatına uygun temiz metinler yaz, ham HTML etiketleri kullanma.
+ÇALIŞMA PRENSİPLERİN VE KURALLAR:
+1. **Samimi ve Profesyonel Karşılama:** Müşteri "merhaba", "selam" gibi bir giriş yaptığında kibarca kendini tanıt ("Ben Kuandy Parfüm'ün kıdemli parfüm uzmanı ve danışmanıyım 🌸") ve aradığı koku karakterini (odunsu, baharatlı, vanilya, yazlık, kışlık vb.) sor.
+2. **Nokta Atışı Eşleştirme:** Aşağıda sana sunulan güncel ürün envanterini dikkatle incele. Müşterinin talebine (Örn: "kışlık erkek parfüm", "baharatlı koku") en uygun olan gerçek ürünleri envanterden seç ve kesinlikle bu listeden öner. Asla uydurma ürün yazma.
+3. **Detaylı Sunum:** Önerdiğin her parfüm için şunları mutlaka belirt:
+   - Ürünün tam adı ve **Erkek, Kadın veya Unisex** olduğu.
+   - Koku notaları (üst, orta, dip nota veya varsa içerik özellikleri).
+   - Fiyatı ve **[Ürünü İncele ve Satın Al (Fiyat TL)](DOĞRUDAN_LİNK)** formatındaki nokta atışı ürün linki. (Asla ana sayfa linkini ürün için kullanma, her ürünün kendi DOĞRUDAN LİNK'ini ver).
+4. **Kuandy Coin Avantajı:** Alışverişlerde müşterilerin **Kuandy Coin** kazanarak sonraki siparişlerinde indirim elde edebileceğini vurgula.
+5. **Yönlendirme:** Eğer müşteri kararsız kalırsa, ona notalar (Vanilya, Amber, Oud, Deri, Çiçeksi, Ferah vb.) hakkında sorular sorarak en doğru kokuya ulaşmasını sağla.
+6. **Biçimlendirme:** Telegram Markdown formatına tam uygun, göz yormayan, şık ve emoji destekli metinler üret.
 """
 
 async def start_komutu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     karsilama = (
-        "Merhaba! Ben Kuandy Parfüm'ün (kuandyparfum.com.tr) yapay zeka danışmanıyım. 🌸\n\n"
-        "İster kışlık, ister yazlık, ister 4 mevsimlik, ister özel koku notalarına sahip parfümler arayın; aradığınız tüm kokuları, cinsiyet seçimlerini ve Kuandy Coin avantajlarını anında bulabilirim. Hangi parfümü arıyorsunuz?"
+        "Merhaba! Ben Kuandy Parfüm'ün (kuandyparfum.com.tr) kıdemli parfüm uzmanı ve satış danışmanıyım. 🌸\n\n"
+        "Konya merkezli mağazamızdan Türkiye'nin dört bir yanına ulaştırdığımız; Lattafa, Afnan, Al Haramain, Rayhaan ve daha pek çok seçkin markanın orijinal parfümleri arasından size en uygun imzayı bulabilirim.\n\n"
+        "Bugün size nasıl bir koku arıyoruz? (Örn: Kışlık kalıcı erkek parfümü, vanilyalı kadın kokusu vb.)"
     )
     await update.message.reply_text(karsilama)
 
 async def ai_yanitla(update: Update, context: ContextTypes.DEFAULT_TYPE):
     kullanici_mesaji = update.message.text
-    print(f"Gelen mesaj: {kullanici_mesaji}")
+    print(f"Gelen müşteri mesajı: {kullanici_mesaji}")
     
-    wc_veri = woocommerce_urun_ara(kullanici_mesaji)
+    # Güncel envanter verisini al
+    envanter_verisi = akilli_urun_filtrele(kullanici_mesaji)
     
-    if wc_veri:
-        baglam_mesaji = f"Kullanıcı mesajı: {kullanici_mesaji}\n\n{wc_veri}"
-    else:
-        baglam_mesaji = f"Kullanıcı mesajı: {kullanici_mesaji}\n\nNot: Sitede bu aramaya birebir uyan ürün bulunamadı. Kullanıcıya genel koleksiyonlar için https://kuandyparfum.com.tr adresini öner ve alternatif notalar sor."
+    baglam_mesaji = f"Müşterinin Talebi/Mesajı: {kullanici_mesaji}\n\n{envanter_verisi}"
     
-    # 503 Yoğunluk hatalarına karşı 3 kez otomatik tekrar deneme mekanizması (Retry)
+    # 503 Yoğunluk hatalarına karşı otomatik tekrar deneme (Retry) mekanizması
     yanit = None
     for deneme in range(3):
         try:
@@ -140,18 +152,19 @@ async def ai_yanitla(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 contents=baglam_mesaji,
                 config={
                     'system_instruction': parfum_talimati,
+                    'temperature': 0.4, # Daha tutarlı ve nokta atışı sonuçlar için düşük sıcaklık
                 }
             )
             yanit = response.text
             break
         except Exception as e:
-            print(f"Deneme {deneme+1} başarısız: {e}")
-            time.sleep(2) # 2 saniye bekleyip tekrar dene
+            print(f"Gemini API Deneme {deneme+1} hatası: {e}")
+            time.sleep(2)
             
     if yanit:
         await update.message.reply_text(yanit, disable_web_page_preview=False)
     else:
-        await update.message.reply_text("Şu an yoğunluk nedeniyle yanıt üretilemedi, lütfen tekrar deneyin.")
+        await update.message.reply_text("Şu an yoğunluk nedeniyle yanıt oluşturulamadı, lütfen tekrar deneyin.")
 
 if __name__ == '__main__':
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
@@ -159,5 +172,5 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("start", start_komutu))
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), ai_yanitla))
     
-    print("Kıyakbot Gelişmiş Esnek Arama Sürümü ile çalışıyor...")
+    print("Kuandy Parfüm Uzmanı AI Bot aktif ve çalışmaya hazır...")
     app.run_polling(drop_pending_updates=True)
