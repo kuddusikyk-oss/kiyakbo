@@ -6,7 +6,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 import threading
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, CommandHandler, filters
-from google import genai
+from groq import Groq
 
 # Logging ayarları
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -17,7 +17,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-type", "text/plain")
         self.end_headers()
-        self.wfile.write(b"Kuandy Parfum AI Bot is active and running!")
+        self.wfile.write(b"Kuandy Parfum Groq AI Bot is active and running!")
 
     def do_HEAD(self):
         self.send_response(200)
@@ -35,13 +35,13 @@ t.start()
 
 # API ve Mağaza Ayarları
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 WC_URL = os.getenv("WC_URL", "https://kuandyparfum.com.tr")
 WC_CONSUMER_KEY = os.getenv("WC_CONSUMER_KEY")
 WC_CONSUMER_SECRET = os.getenv("WC_CONSUMER_SECRET")
 
-# Google GenAI İstemcisi
-client = genai.Client(api_key=GEMINI_API_KEY)
+# Groq İstemcisi
+client = Groq(api_key=GROQ_API_KEY)
 
 # WooCommerce Ürünlerini Bellekte Tutma ve Akıllı Önbellek (Cache)
 urunler_cache = []
@@ -133,37 +133,40 @@ async def ai_yanitla(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print(f"Gelen müşteri mesajı: {kullanici_mesaji}")
     
     envanter_verisi = akilli_urun_filtrele(kullanici_mesaji)
-    baglam_mesaji = f"Müşterinin Talebi/Mesajı: {kullanici_mesaji}\n\n{envanter_verisi}"
+    
+    # Groq formatı için mesaj yapılandırması
+    messages = [
+        {"role": "system", "content": parfum_talimati},
+        {"role": "user", "content": f"Müşterinin Talebi/Mesajı: {kullanici_mesaji}\n\n{envanter_verisi}"}
+    ]
     
     yanit = None
-    # 3'lü deneme döngüsü ve bekleme süreleri artırıldı (Yoğunluk aşımı için)
     for deneme in range(1, 4):
         try:
-            response = client.models.generate_content(
-                model='gemini-3.6-flash',
-                contents=baglam_mesaji,
-                config={
-                    'system_instruction': parfum_talimati,
-                    'temperature': 0.4,
-                }
+            completion = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=messages,
+                temperature=0.4,
+                max_tokens=1500,
             )
-            yanit = response.text
+            yanit = completion.choices[0].message.content
             if yanit:
                 break
         except Exception as e:
-            print(f"Gemini API Deneme {deneme} hatası: {e}")
-            time.sleep(deneme * 1.5) # Her denemede biraz daha fazla bekle (1.5s, 3s)
+            print(f"Groq API Deneme {deneme} hatası: {e}")
+            time.sleep(1)
             
     if yanit:
         await update.message.reply_text(yanit, disable_web_page_preview=False)
     else:
-        await update.message.reply_text("Şu an yoğunluk nedeniyle yanıt oluşturulamadı, lütfen tekrar deneyin.")
+        await update.message.reply_text("Şu an bağlantı sırasında bir hata oluştu, lütfen tekrar deneyin.")
 
 if __name__ == '__main__':
+    # Paket kontrolü hatırlatması için not: requirements.txt içine 'groq' eklenmelidir.
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     
     app.add_handler(CommandHandler("start", start_komutu))
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), ai_yanitla))
     
-    print("Kuandy Parfüm Uzmanı (Gemini 3.6 Flash) aktif ve çalışmaya hazır...")
+    print("Kuandy Parfüm Uzmanı (Groq Llama 3.3) aktif ve çalışmaya hazır...")
     app.run_polling(drop_pending_updates=True)
