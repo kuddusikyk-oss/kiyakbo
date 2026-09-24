@@ -143,7 +143,7 @@ async def ai_yanitla(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for deneme in range(1, 4):
         try:
             completion = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
+                model="llama-3.1-70b-versatile",  # Güncellenen çalışan model adı
                 messages=messages,
                 temperature=0.4,
                 max_tokens=1500,
@@ -166,5 +166,5 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("start", start_komutu))
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), ai_yanitla))
     
-    print("Kuandy Parfüm Uzmanı (Groq Llama 3.3) aktif ve çalışmaya hazır...")
+    print("Kuandy Parfüm Uzmanı (Groq Llama 3.1) aktif ve çalışmaya hazır...")
     app.run_polling(drop_pending_updates=True)
