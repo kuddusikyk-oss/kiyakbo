@@ -136,7 +136,8 @@ async def ai_yanitla(update: Update, context: ContextTypes.DEFAULT_TYPE):
     baglam_mesaji = f"Müşterinin Talebi/Mesajı: {kullanici_mesaji}\n\n{envanter_verisi}"
     
     yanit = None
-    for deneme in range(3):
+    # 3'lü deneme döngüsü ve bekleme süreleri artırıldı (Yoğunluk aşımı için)
+    for deneme in range(1, 4):
         try:
             response = client.models.generate_content(
                 model='gemini-3.6-flash',
@@ -147,10 +148,11 @@ async def ai_yanitla(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 }
             )
             yanit = response.text
-            break
+            if yanit:
+                break
         except Exception as e:
-            print(f"Gemini API Deneme {deneme+1} hatası: {e}")
-            time.sleep(2)
+            print(f"Gemini API Deneme {deneme} hatası: {e}")
+            time.sleep(deneme * 1.5) # Her denemede biraz daha fazla bekle (1.5s, 3s)
             
     if yanit:
         await update.message.reply_text(yanit, disable_web_page_preview=False)
@@ -163,5 +165,5 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("start", start_komutu))
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), ai_yanitla))
     
-    print("Kuandy Parfüm Uzmanı AI Bot aktif ve çalışmaya hazır...")
+    print("Kuandy Parfüm Uzmanı (Gemini 3.6 Flash) aktif ve çalışmaya hazır...")
     app.run_polling(drop_pending_updates=True)
