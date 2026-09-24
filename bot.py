@@ -39,14 +39,14 @@ WC_URL = os.getenv("WC_URL", "https://kuandyparfum.com.tr")
 WC_CONSUMER_KEY = os.getenv("WC_CONSUMER_KEY")
 WC_CONSUMER_SECRET = os.getenv("WC_CONSUMER_SECRET")
 
-# Yeni Google GenAI İstemcisi
+# Google GenAI İstemcisi
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# WooCommerce'den ürün arama ve detay çekme fonksiyonu
+# WooCommerce'den ürün, nitelik ve kategori arama fonksiyonu
 def woocommerce_urun_ara(arama_terimi):
     try:
         url = f"{WC_URL}/wp-json/wc/v3/products"
-        params = {"search": arama_terimi, "per_page": 2}
+        params = {"search": arama_terimi, "per_page": 3}
         response = requests.get(url, params=params, auth=(WC_CONSUMER_KEY, WC_CONSUMER_SECRET), timeout=10)
         
         if response.status_code == 200:
@@ -54,19 +54,30 @@ def woocommerce_urun_ara(arama_terimi):
             if not urunler:
                 return None
             
-            bilgi_metni = "SİTEDE BULUNAN GERÇEK ÜRÜN VERİLERİ (Bu bilgileri ve özellikle verilen LİNKİ birebir kullan):\n\n"
+            bilgi_metni = "SİTEDE BULUNAN GERÇEK ÜRÜN VERİLERİ (Fiyat, Cinsiyet, Nitelikler ve Doğrudan Link):\n\n"
             for u in urunler:
                 ad = u.get("name")
                 fiyat = u.get("price")
                 stok_durumu = "Stokta Var ✅" if u.get("stock_status") == "instock" else "Tükendi ❌"
                 link = u.get("permalink")
+                
+                # Nitelikler (Örn: Cinsiyet, Koku Notası vb.)
+                nitelikler = u.get("attributes", [])
+                nitelik_metni = ""
+                for nit in nitelikler:
+                    isim = nit.get("name")
+                    secenekler = ", ".join(nit.get("options", []))
+                    nitelik_metni += f"- {isim}: {secenekler}\n"
+
                 kisa_aciklama = u.get("short_description", "").replace("<p>", "").replace("</p>", "").replace("<br />", "\n").replace("<strong>", "").replace("</strong>", "")
                 
-                bilgi_metni += f"- Ürün Adı: {ad}\n"
-                bilgi_metni += f"- Fiyat: {fiyat} TL\n"
-                bilgi_metni += f"- Stok Durumu: {stok_durumu}\n"
-                bilgi_metni += f"- Ürün Kısa Açıklaması: {kisa_aciklama}\n"
-                bilgi_metni += f"- ÜRÜN DOĞRUDAN LİNKİ: {link}\n\n"
+                bilgi_metni += f"* Ürün Adı: {ad}\n"
+                bilgi_metni += f"* Fiyat: {fiyat} TL\n"
+                bilgi_metni += f"* Stok Durumu: {stok_durumu}\n"
+                if nitelik_metni:
+                    bilgi_metni += f"* Ürün Nitelikleri (Cinsiyet/Nota vb.):\n{nitelik_metni}"
+                bilgi_metni += f"* Kısa Açıklama: {kisa_aciklama}\n"
+                bilgi_metni += f"* DOĞRUDAN LİNK: {link}\n\n"
             return bilgi_metni
         else:
             return None
@@ -74,23 +85,27 @@ def woocommerce_urun_ara(arama_terimi):
         print(f"WooCommerce API Hatası: {e}")
         return None
 
-# Kesin kurallı sistem talimatı
+# Kapsamlı Sistem Talimatı
 parfum_talimati = """
-Sen Kuandy Parfüm (kuandyparfum.com.tr) e-ticaret sitesinin resmi yapay zeka parfüm danışmanısın. 
+Sen Kuandy Parfüm (kuandyparfum.com.tr) e-ticaret sitesinin resmi ve profesyonel yapay zeka parfüm danışmanısın. 
 
-KURALLAR:
-1. Kullanıcı "merhaba", "selam" gibi genel bir selamlama yazdığında kibarca karşıla ve Kuandy Parfüm'e hoş geldin de.
-2. Kullanıcı bir ürün sorduğunda, yukarıda sağlanan "SİTEDE BULUNAN GERÇEK ÜRÜN VERİLERİ"ndeki bilgileri (fiyat, stok, kısa açıklama) eksiksiz kullan.
-3. Kesinlikle genel ana sayfa linkini verme! Sadece sana verilen "ÜRÜN DOĞRUDAN LİNKİ" adresini kullan. Linki şu formatta ekle: [Ürünü İncele ve Satın Al (Fiyat TL)](LİNK).
-4. Mesajlarında ham HTML etiketleri (`###` vb.) kullanma. Telegram Markdown kurallarına uygun temiz metinler yaz.
-5. Alışverişlerde kazanılan **Kuandy Coin** avantajından mutlaka bahset.
-6. Asla başka rakip sitelere yönlendirme yapma.
+GÖREVLERİN VE KURALLAR:
+1. **Karşılama:** Kullanıcı "merhaba", "selam" gibi bir giriş yaptığında kibarca kendini tanıt ("Ben Kuandy Parfüm yapay zeka danışmanıyım 🌸") ve nasıl yardımcı olabileceğini sor.
+2. **Kategori ve Mevsim Yönlendirmesi:** 
+   - Kullanıcı kışlık parfüm isterse kış parfümleri kategorisine/seçeneklerine yönlendir.
+   - 4 mevsim parfüm isterse yaz/kış dört mevsim kullanılabilen ürünlere yönlendir.
+   - Genel aramalarda kullanıcıyı doğru koku profiline ve kategoriye yönlendir.
+3. **Cinsiyet / Unisex Belirtme:** Önerdiğin her ürünün **Erkek, Kadın veya Unisex** olduğunu ürün niteliklerine bakarak net bir şekilde belirt.
+4. **Koku Notaları:** Sitede tanımlı olan niteliklerdeki koku notalarını (üst nota, kalp nota, dip nota vb.) ve açıklamaları kullanarak müşteriye detaylı bilgi ver.
+5. **Ürün Linki ve Fiyat:** Ürün önerirken mutlaka fiyatını belirt ve linki şu formatta ver: `[Ürünü İncele ve Satın Al (Fiyat TL)](ÜRÜN_DOĞRUDAN_LİNKİ)`. Asla genel ana sayfa linkini ürün için verme.
+6. **Kuandy Coin:** Alışverişlerde kazanılan **Kuandy Coin** avantajından bahset.
+7. **Biçimlendirme:** Telegram Markdown formatına uygun, temiz ve düzenli metinler yaz. Ham HTML etiketleri kullanma.
 """
 
 async def start_komutu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     karsilama = (
-        "Merhaba! Kuandy Parfüm'ün (kuandyparfum.com.tr) yapay zeka danışmanına hoş geldiniz. 🌸\n\n"
-        "Aradığınız parfümü yazın; anlık fiyatını, stok durumunu, siteye girdiğiniz özel açıklamalarını ve doğrudan ürün linkini hemen size sunayım!"
+        "Merhaba! Ben Kuandy Parfüm'ün (kuandyparfum.com.tr) yapay zeka danışmanıyım. 🌸\n\n"
+        "İster kışlık, ister yazlık, ister 4 mevsimlik arayın; aradığınız parfüm notalarını, cinsiyet tercihini ve size özel Kuandy Coin avantajlarını anında bulabilirim. Hangi parfümü arıyorsunuz?"
     )
     await update.message.reply_text(karsilama)
 
@@ -100,15 +115,14 @@ async def ai_yanitla(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     wc_veri = woocommerce_urun_ara(kullanici_mesaji)
     
-    baglam_mesaji = kullanici_mesaji
     if wc_veri:
         baglam_mesaji = f"Kullanıcı mesajı: {kullanici_mesaji}\n\n{wc_veri}"
     else:
-        baglam_mesaji = f"Kullanıcı mesajı: {kullanici_mesaji}\n\nNot: Sitede bu aramaya birebir uyan ürün bulunamadı. Genel koleksiyon veya ana sayfa linki olarak https://kuandyparfum.com.tr adresini ver."
+        baglam_mesaji = f"Kullanıcı mesajı: {kullanici_mesaji}\n\nNot: Sitede bu aramaya birebir uyan ürün bulunamadı. Kullanıcıya kışlık, yazlık veya 4 mevsimlik genel koleksiyonlar için https://kuandyparfum.com.tr adresini rehber olarak göster ve alternatif kategoriler sor."
     
     try:
         response = client.models.generate_content(
-            model='gemini-3.6-flash',  # <--- Güncel model adı buraya yazıldı
+            model='gemini-2.0-flash',
             contents=baglam_mesaji,
             config={
                 'system_instruction': parfum_talimati,
@@ -117,12 +131,12 @@ async def ai_yanitla(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(response.text, disable_web_page_preview=False)
     except Exception as e:
         print(f"Hata detayı: {e}")
-        await update.message.reply_text("Parfüm danışmanımız yanıt üretirken bir sorunla karşılaştı.")
+        await update.message.reply_text("Parfüm danışmanımız yanıt üretirken anlık bir teknik sorunla karşılaştı, lütfen tekrar deneyin.")
 
 if __name__ == '__main__':
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler("start", start_komutu))
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), ai_yanitla))
     
-    print("Kıyakbot Yeni GenAI SDK ile çalışıyor...")
+    print("Kıyakbot Kararlı ve Güncel Sürüm ile çalışıyor...")
     app.run_polling()
