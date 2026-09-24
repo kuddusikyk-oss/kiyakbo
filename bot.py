@@ -50,13 +50,11 @@ son_guncelleme_zamani = 0
 def woocommerce_envanterini_guncelle():
     global urunler_cache, son_guncelleme_zamani
     simdi = time.time()
-    # Her 15 dakikada bir veya ilk çalışmada envanteri tazele
     if urunler_cache and (simdi - son_guncelleme_zamani < 900):
         return urunler_cache
 
     try:
         url = f"{WC_URL}/wp-json/wc/v3/products"
-        # En güncel ve stoktaki ürünleri çek
         params = {"per_page": 50, "status": "publish", "orderby": "date", "order": "desc"}
         response = requests.get(url, params=params, auth=(WC_CONSUMER_KEY, WC_CONSUMER_SECRET), timeout=15)
         
@@ -74,8 +72,7 @@ def akilli_urun_filtrele(kullanici_sorgusu):
     if not tum_urunler:
         return "Şu anda site envanterine ulaşılamadı."
 
-    # Müşteriye sunulmak üzere envanteri yapay zekanın anlayacağı zengin metin formatına dönüştür
-     envanter_metni = "KUANDY PARFÜM GÜNCEL ÜRÜN ENVANTERİ VE DETAYLARI:\n\n"
+    envanter_metni = "KUANDY PARFÜM GÜNCEL ÜRÜN ENVANTERİ VE DETAYLARI:\n\n"
     
     for u in tum_urunler:
         ad = u.get("name", "")
@@ -83,17 +80,14 @@ def akilli_urun_filtrele(kullanici_sorgusu):
         stok = "Stokta Var ✅" if u.get("stock_status") == "instock" else "Tükendi ❌"
         link = u.get("permalink", WC_URL)
         
-        # Kategoriler
         kategoriler = ", ".join([cat.get("name", "") for cat in u.get("categories", [])])
         
-        # Nitelikler (Cinsiyet, Nota vb.)
         nitelik_metni = ""
         for nit in u.get("attributes", []):
             isim = nit.get("name", "")
             secenekler = ", ".join(nit.get("options", []))
             nitelik_metni += f"  - {isim}: {secenekler}\n"
 
-        # HTML etiketlerinden arındırılmış kısa açıklama
         aciklama = u.get("short_description", "")
         for tag in ["<p>", "</p>", "<br>", "<br />", "<strong>", "</strong>", "<em>", "</em>"]:
             aciklama = aciklama.replace(tag, "")
@@ -116,7 +110,7 @@ Sen kuandyparfum.com.tr adresinin resmi, üst düzey kıdemli parfüm uzmanı ve
 
 ÇALIŞMA PRENSİPLERİN VE KURALLAR:
 1. **Samimi ve Profesyonel Karşılama:** Müşteri "merhaba", "selam" gibi bir giriş yaptığında kibarca kendini tanıt ("Ben Kuandy Parfüm'ün kıdemli parfüm uzmanı ve danışmanıyım 🌸") ve aradığı koku karakterini (odunsu, baharatlı, vanilya, yazlık, kışlık vb.) sor.
-2. **Nokta Atışı Eşleştirme:** Aşağıda sana sunulan güncel ürün envanterini dikkatle incele. Müşterinin talebine (Örn: "kışlık erkek parfüm", "baharatlı koku") en uygun olan gerçek ürünleri envanterden seç ve kesinlikle bu listeden öner. Asla uydurma ürün yazma.
+2. **Nokta Atışı Eşleştirme:** Aşağıda sana sunulan güncel ürün envanterini dikkatle incele. Müşterinin talebine en uygun olan gerçek ürünleri envanterden seç ve kesinlikle bu listeden öner. Asla uydurma ürün yazma.
 3. **Detaylı Sunum:** Önerdiğin her parfüm için şunları mutlaka belirt:
    - Ürünün tam adı ve **Erkek, Kadın veya Unisex** olduğu.
    - Koku notaları (üst, orta, dip nota veya varsa içerik özellikleri).
@@ -138,12 +132,9 @@ async def ai_yanitla(update: Update, context: ContextTypes.DEFAULT_TYPE):
     kullanici_mesaji = update.message.text
     print(f"Gelen müşteri mesajı: {kullanici_mesaji}")
     
-    # Güncel envanter verisini al
     envanter_verisi = akilli_urun_filtrele(kullanici_mesaji)
-    
     baglam_mesaji = f"Müşterinin Talebi/Mesajı: {kullanici_mesaji}\n\n{envanter_verisi}"
     
-    # 503 Yoğunluk hatalarına karşı otomatik tekrar deneme (Retry) mekanizması
     yanit = None
     for deneme in range(3):
         try:
@@ -152,7 +143,7 @@ async def ai_yanitla(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 contents=baglam_mesaji,
                 config={
                     'system_instruction': parfum_talimati,
-                    'temperature': 0.4, # Daha tutarlı ve nokta atışı sonuçlar için düşük sıcaklık
+                    'temperature': 0.4,
                 }
             )
             yanit = response.text
